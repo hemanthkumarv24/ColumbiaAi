@@ -1,0 +1,6 @@
+@ColumbiaAi.Backend_HostAddress = http://localhost:5096
+
+GET {{ColumbiaAi.Backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
