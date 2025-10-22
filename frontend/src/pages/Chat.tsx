@@ -3,6 +3,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { chatService, fileService } from "../services/api";
 import { ChatMessage, ChatSession } from "../types";
 import "./Chat.css";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+import "highlight.js/styles/github-dark.css";
 
 const Chat: React.FC = () => {
   const [message, setMessage] = useState("");
@@ -169,11 +173,29 @@ const Chat: React.FC = () => {
           ) : (
             messages.map((msg, index) => (
               <div key={index} className={`message ${msg.role}`}>
-                <div
-                  className="message-content"
-                  style={{ whiteSpace: "pre-wrap" }}
-                >
-                  {msg.content}
+                <div className="message-content">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight]}
+                    components={{
+                      code({ className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || "");
+                        return match ? (
+                          <pre className="chat-code-block">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="inline-code" {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
 
                   {(msg.attachments || []).length > 0 && (
                     <div className="attachments">
