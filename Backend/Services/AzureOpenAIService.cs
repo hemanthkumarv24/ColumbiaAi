@@ -42,13 +42,35 @@ public class AzureOpenAIService : IAzureOpenAIService
         {
             if (msg.Role == "user")
             {
-                chatMessages.Add(new UserChatMessage(msg.Content));
+                string content = msg.Content;
+
+                if (msg.Attachments != null && msg.Attachments.Any())
+                {
+                    foreach (var url in msg.Attachments)
+                    {
+                        if (url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var pdfText = await PdfHelper.ExtractTextFromUrlAsync(url);
+                            content += "\n\n[Attachment PDF Text]:\n" + pdfText;
+                        }
+                        else
+                        {
+                            // For plain text files
+                            using var httpClient = new HttpClient();
+                            var fileText = await httpClient.GetStringAsync(url);
+                            content += "\n\n[Attachment Text]:\n" + fileText;
+                        }
+                    }
+                }
+
+                chatMessages.Add(new UserChatMessage(content));
             }
             else if (msg.Role == "assistant")
             {
                 chatMessages.Add(new AssistantChatMessage(msg.Content));
             }
         }
+
 
         var response = await chatClient.CompleteChatAsync(chatMessages);
         return response.Value.Content[0].Text;

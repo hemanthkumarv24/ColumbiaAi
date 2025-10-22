@@ -80,7 +80,6 @@ public class ChatController : ControllerBase
             var history = await _cosmosDb.GetSessionMessagesAsync(session.Id);
             
             var contextMessages = history.TakeLast(10).ToList();
-
             string? userContext = null;
             if (_features.EnableUserProfiling)
             {
@@ -90,7 +89,15 @@ public class ChatController : ControllerBase
                     userContext = user.Profile.Context;
                 }
             }
+            // Log user message details
+            Console.WriteLine("User Message:");
+            Console.WriteLine($"SessionId: {userMessage.SessionId}");
+            Console.WriteLine($"UserId: {userMessage.UserId}");
+            Console.WriteLine($"Role: {userMessage.Role}");
+            Console.WriteLine($"Content: {userMessage.Content}");
+            Console.WriteLine($"Attachments: {string.Join(", ", userMessage.Attachments ?? new List<string>())}");
 
+            
             var aiResponse = await _openAIService.GetChatResponseAsync(contextMessages, userContext);
 
             var assistantMessage = new ChatMessage

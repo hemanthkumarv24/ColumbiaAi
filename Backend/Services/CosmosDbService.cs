@@ -1,9 +1,7 @@
-using Microsoft.Azure.Cosmos;
-using ColumbiaAi.Backend.Configuration;
+using MongoDB.Driver;
 using ColumbiaAi.Backend.Models;
 using CosmosUser = Microsoft.Azure.Cosmos.User;
 using AppUser = ColumbiaAi.Backend.Models.User;
-
 namespace ColumbiaAi.Backend.Services;
 
 public interface ICosmosDbService
@@ -22,129 +20,66 @@ public interface ICosmosDbService
 
 public class CosmosDbService : ICosmosDbService
 {
-    private readonly Container _usersContainer;
-    private readonly Container _sessionsContainer;
-    private readonly Container _chatHistoryContainer;
+    private readonly IMongoCollection<AppUser> _usersCollection;
+    private readonly IMongoCollection<ChatSession> _sessionsCollection;
+    private readonly IMongoCollection<ChatMessage> _chatHistoryCollection;
 
-    public CosmosDbService(CosmosClient cosmosClient, CosmosDbConfig config)
+    public CosmosDbService(IMongoDatabase database, IConfiguration config)
     {
-        var database = cosmosClient.GetDatabase(config.DatabaseName);
-        _usersContainer = database.GetContainer(config.UsersContainer);
-        _sessionsContainer = database.GetContainer(config.SessionsContainer);
-        _chatHistoryContainer = database.GetContainer(config.ChatHistoryContainer);
+        _usersCollection = database.GetCollection<AppUser>(config["CosmosDb:UsersContainer"]);
+        _sessionsCollection = database.GetCollection<ChatSession>(config["CosmosDb:SessionsContainer"]);
+        _chatHistoryCollection = database.GetCollection<ChatMessage>(config["CosmosDb:ChatHistoryContainer"]);
     }
 
     public async Task<AppUser?> GetUserByEmailAsync(string email)
-    {
-        try
-        {
-            var query = new QueryDefinition("SELECT * FROM c WHERE c.email = @email")
-                .WithParameter("@email", email);
-            
-            var iterator = _usersContainer.GetItemQueryIterator<AppUser>(query);
-            var results = await iterator.ReadNextAsync();
-            
-            return results.FirstOrDefault();
-        }
-        catch (CosmosException)
-        {
-            return null;
-        }
-    }
+        => await _usersCollection.Find(u => u.Email == email).FirstOrDefaultAsync();
 
     public async Task<AppUser?> GetUserByIdAsync(string userId)
-    {
-        try
-        {
-            var response = await _usersContainer.ReadItemAsync<AppUser>(userId, new PartitionKey(userId));
-            return response.Resource;
-        }
-        catch (CosmosException)
-        {
-            return null;
-        }
-    }
+        => await _usersCollection.Find(u => u.Id == userId).FirstOrDefaultAsync();
 
     public async Task<AppUser> CreateUserAsync(AppUser user)
     {
-        var response = await _usersContainer.CreateItemAsync(user, new PartitionKey(user.Id));
-        return response.Resource;
+        await _usersCollection.InsertOneAsync(user);
+        return user;
     }
 
     public async Task<AppUser> UpdateUserAsync(AppUser user)
     {
-        var response = await _usersContainer.ReplaceItemAsync(user, user.Id, new PartitionKey(user.Id));
-        return response.Resource;
+        await _usersCollection.ReplaceOneAsync(u => u.Id == user.Id, user);
+        return user;
     }
 
     public async Task<ChatSession> CreateSessionAsync(ChatSession session)
     {
-        var response = await _sessionsContainer.CreateItemAsync(session, new PartitionKey(session.UserId));
-        return response.Resource;
+        await _sessionsCollection.InsertOneAsync(session);
+        return session;
     }
 
     public async Task<ChatSession?> GetSessionAsync(string sessionId)
-    {
-        try
-        {
-            var query = new QueryDefinition("SELECT * FROM c WHERE c.id = @id")
-                .WithParameter("@id", sessionId);
-            
-            var iterator = _sessionsContainer.GetItemQueryIterator<ChatSession>(query);
-            var results = await iterator.ReadNextAsync();
-            
-            return results.FirstOrDefault();
-        }
-        catch (CosmosException)
-        {
-            return null;
-        }
-    }
+        => await _sessionsCollection.Find(s => s.Id == sessionId).FirstOrDefaultAsync();
 
     public async Task<List<ChatSession>> GetUserSessionsAsync(string userId)
-    {
-        var query = new QueryDefinition("SELECT * FROM c WHERE c.userId = @userId ORDER BY c.updatedAt DESC")
-            .WithParameter("@userId", userId);
-        
-        var iterator = _sessionsContainer.GetItemQueryIterator<ChatSession>(query);
-        var sessions = new List<ChatSession>();
-        
-        while (iterator.HasMoreResults)
-        {
-            var results = await iterator.ReadNextAsync();
-            sessions.AddRange(results);
-        }
-        
-        return sessions;
-    }
+        => await _sessionsCollection
+            .Find(s => s.UserId == userId)
+            .SortByDescending(s => s.UpdatedAt)
+            .ToListAsync();
 
     public async Task<ChatSession> UpdateSessionAsync(ChatSession session)
     {
         session.UpdatedAt = DateTime.UtcNow;
-        var response = await _sessionsContainer.ReplaceItemAsync(session, session.Id, new PartitionKey(session.UserId));
-        return response.Resource;
+        await _sessionsCollection.ReplaceOneAsync(s => s.Id == session.Id, session);
+        return session;
     }
 
     public async Task<ChatMessage> AddMessageAsync(ChatMessage message)
     {
-        var response = await _chatHistoryContainer.CreateItemAsync(message, new PartitionKey(message.SessionId));
-        return response.Resource;
+        await _chatHistoryCollection.InsertOneAsync(message);
+        return message;
     }
 
     public async Task<List<ChatMessage>> GetSessionMessagesAsync(string sessionId)
-    {
-        var query = new QueryDefinition("SELECT * FROM c WHERE c.sessionId = @sessionId ORDER BY c.timestamp ASC")
-            .WithParameter("@sessionId", sessionId);
-        
-        var iterator = _chatHistoryContainer.GetItemQueryIterator<ChatMessage>(query);
-        var messages = new List<ChatMessage>();
-        
-        while (iterator.HasMoreResults)
-        {
-            var results = await iterator.ReadNextAsync();
-            messages.AddRange(results);
-        }
-        
-        return messages;
-    }
+        => await _chatHistoryCollection
+            .Find(m => m.SessionId == sessionId)
+            .SortBy(m => m.Timestamp)
+            .ToListAsync();
 }

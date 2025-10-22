@@ -1,9 +1,9 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
 using ColumbiaAi.Backend.Configuration;
 using ColumbiaAi.Backend.Services;
+using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,7 +53,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// Azure Services
+// Azure & Feature Configs
 builder.Services.AddSingleton(azureOpenAIConfig);
 builder.Services.AddSingleton(cosmosDbConfig);
 builder.Services.AddSingleton(blobStorageConfig);
@@ -61,14 +61,27 @@ builder.Services.AddSingleton(cognitiveSearchConfig);
 builder.Services.AddSingleton(jwtSettings);
 builder.Services.AddSingleton(featureFlags);
 
-// Cosmos DB
-builder.Services.AddSingleton<CosmosClient>(sp =>
+// ----------------------
+// MongoDB (Cosmos DB Mongo API)
+// ----------------------
+
+// Register MongoClient
+builder.Services.AddSingleton<IMongoClient>(sp =>
 {
-    return new CosmosClient(cosmosDbConfig.Endpoint, cosmosDbConfig.Key);
+    return new MongoClient(cosmosDbConfig.ConnectionString);
 });
 
-// Register Services
+// Register IMongoDatabase
+builder.Services.AddSingleton(sp =>
+{
+    var client = sp.GetRequiredService<IMongoClient>();
+    return client.GetDatabase(cosmosDbConfig.DatabaseName);
+});
+
+// Register CosmosDbService (MongoDB version)
 builder.Services.AddSingleton<ICosmosDbService, CosmosDbService>();
+
+// Register other services
 builder.Services.AddSingleton<IAzureOpenAIService, AzureOpenAIService>();
 builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
 builder.Services.AddSingleton<ICognitiveSearchService, CognitiveSearchService>();
@@ -89,5 +102,4 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
 app.Run();

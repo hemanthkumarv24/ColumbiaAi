@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { chatService, fileService } from '../services/api';
-import { ChatMessage, ChatSession } from '../types';
-import './Chat.css';
+import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { chatService, fileService } from "../services/api";
+import { ChatMessage, ChatSession } from "../types";
+import "./Chat.css";
 
 const Chat: React.FC = () => {
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [currentSessionId, setCurrentSessionId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [attachments, setAttachments] = useState<string[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, logout } = useAuth();
@@ -20,19 +22,15 @@ const Chat: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   const loadSessions = async () => {
     try {
       const sessionsData = await chatService.getSessions();
       setSessions(sessionsData);
     } catch (err) {
-      console.error('Error loading sessions:', err);
+      console.error("Error loading sessions:", err);
     }
   };
 
@@ -42,56 +40,63 @@ const Chat: React.FC = () => {
       setMessages(messagesData);
       setCurrentSessionId(sessionId);
     } catch (err) {
-      console.error('Error loading session messages:', err);
+      console.error("Error loading session messages:", err);
     }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() && attachments.length === 0) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       sessionId: currentSessionId,
-      userId: user?.userId || '',
-      role: 'user',
+      userId: user?.userId || "",
+      role: "user",
       content: message,
       timestamp: new Date().toISOString(),
+      attachments: [...attachments],
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setMessage('');
+    setMessage("");
+    setAttachments([]);
     setLoading(true);
 
     try {
       const response = await chatService.sendMessage({
-        message: message,
+        message,
         sessionId: currentSessionId || undefined,
+        attachments: userMessage.attachments,
       });
 
       const assistantMessage: ChatMessage = {
         id: Date.now().toString(),
         sessionId: response.sessionId,
-        userId: user?.userId || '',
-        role: 'assistant',
+        userId: user?.userId || "",
+        role: "assistant",
         content: response.message,
         timestamp: response.timestamp,
+        attachments: response.attachments || [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
       setCurrentSessionId(response.sessionId);
       await loadSessions();
     } catch (err: any) {
-      console.error('Error sending message:', err);
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        sessionId: currentSessionId,
-        userId: user?.userId || '',
-        role: 'assistant',
-        content: 'Sorry, there was an error processing your message. Please try again.',
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      console.error("Error sending message:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          sessionId: currentSessionId,
+          userId: user?.userId || "",
+          role: "assistant",
+          content: "Sorry, there was an error processing your message.",
+          timestamp: new Date().toISOString(),
+          attachments: [],
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -104,9 +109,9 @@ const Chat: React.FC = () => {
     setUploading(true);
     try {
       const url = await fileService.uploadFile(file);
-      console.log('File uploaded:', url);
+      setAttachments((prev) => [...prev, url]);
     } catch (err) {
-      console.error('Error uploading file:', err);
+      console.error("Error uploading file:", err);
     } finally {
       setUploading(false);
     }
@@ -114,7 +119,8 @@ const Chat: React.FC = () => {
 
   const startNewChat = () => {
     setMessages([]);
-    setCurrentSessionId('');
+    setCurrentSessionId("");
+    setAttachments([]);
   };
 
   return (
@@ -131,7 +137,9 @@ const Chat: React.FC = () => {
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`session-item ${session.id === currentSessionId ? 'active' : ''}`}
+              className={`session-item ${
+                session.id === currentSessionId ? "active" : ""
+              }`}
               onClick={() => loadSession(session.id)}
             >
               <div className="session-title">{session.title}</div>
@@ -161,7 +169,35 @@ const Chat: React.FC = () => {
           ) : (
             messages.map((msg, index) => (
               <div key={index} className={`message ${msg.role}`}>
-                <div className="message-content">{msg.content}</div>
+                <div
+                  className="message-content"
+                  style={{ whiteSpace: "pre-wrap" }}
+                >
+                  {msg.content}
+
+                  {(msg.attachments || []).length > 0 && (
+                    <div className="attachments">
+                      {(msg.attachments || []).map((url, i) => (
+                        <div key={i} className="attachment-item">
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {url.split("/").pop()}
+                          </a>
+                          {url.match(/\.(jpg|jpeg|png|gif)$/i) && (
+                            <img
+                              src={url}
+                              alt="attachment"
+                              className="file-image-preview"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ))
           )}
@@ -174,31 +210,121 @@ const Chat: React.FC = () => {
         </div>
 
         <form className="chat-input-form" onSubmit={handleSendMessage}>
+          <div className="message-input-wrapper">
+            {/* Left Icon */}
+            <span
+              className="input-left-icon"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                width={20}
+                height={20}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 5v14m7-7H5"
+                />
+              </svg>
+            </span>
+
+            {/* Input Area */}
+            <div className="input-area">
+              {/* Attachment Previews */}
+              {attachments.length > 0 && (
+                <div className="attachments-preview-inline">
+                  {attachments.map((url, i) => (
+                    <div key={i} className="attachment-preview-item-inline">
+                      {url.match(/\.(jpg|jpeg|png|gif)$/i) ? (
+                        <img
+                          src={url}
+                          alt="attachment"
+                          className="attachment-preview-image-inline"
+                        />
+                      ) : (
+                        <span className="attachment-preview-file-inline">
+                          {url.split("/").pop()}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="remove-attachment-btn-inline"
+                        onClick={() =>
+                          setAttachments((prev) =>
+                            prev.filter((_, index) => index !== i)
+                          )
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Textarea */}
+              <textarea
+                className="message-input"
+                value={message}
+                placeholder="Type your message..."
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = e.target.scrollHeight + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e as any);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Send Icon */}
+            <span className="input-right-icon">
+              <button
+                type="submit"
+                className="send-btn"
+                disabled={!message.trim() && attachments.length === 0}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  width={16}
+                  height={16}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 19l7-7-7-7M5 12h14"
+                  />
+                </svg>
+              </button>
+            </span>
+          </div>
+
           <input
             type="file"
             ref={fileInputRef}
+            style={{ display: "none" }}
             onChange={handleFileUpload}
-            style={{ display: 'none' }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="attach-btn"
-          >
-            📎
-          </button>
+
           <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your message..."
-            disabled={loading}
-            className="message-input"
+            type="file"
+            ref={fileInputRef}
+            style={{ display: "none" }}
+            onChange={handleFileUpload}
           />
-          <button type="submit" disabled={loading || !message.trim()} className="send-btn">
-            Send
-          </button>
         </form>
       </div>
     </div>

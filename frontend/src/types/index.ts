@@ -26,10 +26,10 @@ export interface ChatMessage {
   id: string;
   sessionId: string;
   userId: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
-  attachments?: string[];
+  attachments?: string[]; // optional file URL
 }
 
 export interface ChatSession {
@@ -45,6 +45,7 @@ export interface ChatSession {
 export interface ChatRequest {
   message: string;
   sessionId?: string;
+
   attachments?: string[];
 }
 
@@ -52,6 +53,7 @@ export interface ChatResponse {
   message: string;
   sessionId: string;
   timestamp: string;
+  attachments?: string[];
 }
 
 export interface UserProfile {
