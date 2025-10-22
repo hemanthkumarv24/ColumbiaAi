@@ -51,10 +51,12 @@ public class ChatController : ControllerBase
             ChatSession? session;
             if (string.IsNullOrEmpty(request.SessionId))
             {
+                var resp = await _openAIService.GetChatNameAsync(request.Message);
+
                 session = new ChatSession
                 {
                     UserId = userId,
-                    Title = "New Conversation"
+                    Title = resp
                 };
                 session = await _cosmosDb.CreateSessionAsync(session);
             }
