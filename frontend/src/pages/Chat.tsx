@@ -147,9 +147,9 @@ const Chat: React.FC = () => {
               onClick={() => loadSession(session.id)}
             >
               <div className="session-title">{session.title}</div>
-              <div className="session-date">
+              {/* <div className="session-date">
                 {new Date(session.updatedAt).toLocaleDateString()}
-              </div>
+              </div> */}
             </div>
           ))}
         </div>

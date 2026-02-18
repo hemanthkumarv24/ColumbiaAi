@@ -1,0 +1,11 @@
+name: "Enterprise .NET CodeQL Config"
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  - "**/bin"
+  - "**/obj"
+  - "**/node_modules"
+  - "**/Generated"
+  - "**/*.Designer.cs"
