@@ -46,10 +46,12 @@ jobs:
 
       # 4️⃣ Restore dependencies
       - name: Restore dependencies
+        working-directory: ./Backend
         run: dotnet restore
 
       # 5️⃣ Build solution (Required for CodeQL dataflow analysis)
       - name: Build
+        working-directory: ./Backend
         run: dotnet build --no-restore --configuration Release
 
       # 6️⃣ Run CodeQL Analysis
