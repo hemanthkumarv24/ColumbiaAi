@@ -1,7 +1,7 @@
 name: "Enterprise .NET CodeQL Config"
 
 queries:
-  - uses: default
+  - uses: github/codeql/csharp-queries:security-and-quality
   # - uses: security-extended
 
 paths-ignore:
