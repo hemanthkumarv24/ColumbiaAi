@@ -1,7 +1,8 @@
 name: "Enterprise .NET CodeQL Config"
 
 queries:
-  - uses: security-extended
+  - uses: default
+  # - uses: security-extended
 
 paths-ignore:
   - "**/bin"
